@@ -1,0 +1,165 @@
+name: Lighthouse CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to run Lighthouse on'
+        required: false
+        default: 'http://localhost:8080'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  lighthouse-audit:
+    name: Lighthouse Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: |
+          npm install -g @lhci/cli@0.14.x
+          npm install -g http-server
+          
+      - name: Start local server
+        run: http-server . -p 8080 &
+        
+      - name: Run Lighthouse CI
+        id: lighthouse
+        continue-on-error: true
+        run: |
+          URL="${{ github.event.inputs.url || 'http://localhost:8080' }}"
+          lhci autorun --collect.url=$URL
+          
+      - name: Create GitHub Issue with Results
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const lhciDir = '.lighthouseci';
+            const jsonReports = fs.readdirSync(lhciDir).filter(f => f.endsWith('.json'));
+            const latestReport = jsonReports.sort().reverse()[0];
+            const reportPath = path.join(lhciDir, latestReport);
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+
+            const formatScore = (value = 0) => {
+              return Math.round(value * 100);
+            };
+            
+            const getEmoji = (value, metric) => {
+              const thresholds = {
+                LCP: { good: 2500, needsImprovement: 4000 },
+                INP: { good: 200, needsImprovement: 500 },
+                CLS: { good: 0.1, needsImprovement: 0.25 },
+              };
+              
+              if (!thresholds[metric]) return value >= 90 ? '🟢' : value >= 50 ? '🟠' : '🔴';
+              
+              const t = thresholds[metric];
+              return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
+            };
+
+            const formatMetric = (value, metric) => {
+              if (!value) return 'N/A';
+              if (metric === 'CLS') return value.toFixed(3);
+              return `${(value / 1000).toFixed(2)}s`;
+            };
+
+            const getLighthouseResult = (report, category) => {
+              try {
+                return report.categories?.[category]?.score ?? 0;
+              } catch (e) {
+                return 0;
+              }
+            };
+
+            const getMetricValue = (report, metric) => {
+              try {
+                return report.audits?.[metric]?.numericValue ?? 0;
+              } catch (e) {
+                return 0;
+              }
+            };
+
+            const lighthouseScores = {
+              performance: getLighthouseResult(report, 'performance'),
+              accessibility: getLighthouseResult(report, 'accessibility'),
+              'best-practices': getLighthouseResult(report, 'best-practices'),
+              seo: getLighthouseResult(report, 'seo'),
+              pwa: getLighthouseResult(report, 'pwa')
+            };
+
+            const webVitals = {
+              LCP: getMetricValue(report, 'largest-contentful-paint'),
+              INP: getMetricValue(report, 'experimental-interaction-to-next-paint'),
+              CLS: getMetricValue(report, 'cumulative-layout-shift')
+            };
+            
+            const reportUrl = `.lighthouseci/${latestReport.replace('.json', '.html')}`;
+            
+            const body = `## 🚨 웹사이트 성능 측정 결과
+
+            ### 🎯 Lighthouse 점수
+            | 카테고리 | 점수 | 상태 |
+            |----------|------|------|
+            | Performance | ${formatScore(lighthouseScores.performance)}% | ${getEmoji(formatScore(lighthouseScores.performance))} |
+            | Accessibility | ${formatScore(lighthouseScores.accessibility)}% | ${getEmoji(formatScore(lighthouseScores.accessibility))} |
+            | Best Practices | ${formatScore(lighthouseScores['best-practices'])}% | ${getEmoji(formatScore(lighthouseScores['best-practices']))} |
+            | SEO | ${formatScore(lighthouseScores.seo)}% | ${getEmoji(formatScore(lighthouseScores.seo))} |
+            | PWA | ${formatScore(lighthouseScores.pwa)}% | ${getEmoji(formatScore(lighthouseScores.pwa))} |
+
+            ### 📊 Core Web Vitals (2024)
+            | 메트릭 | 설명 | 측정값 | 상태 |
+            |--------|------|--------|------|
+            | LCP | Largest Contentful Paint | ${formatMetric(webVitals.LCP, 'LCP')} | ${getEmoji(webVitals.LCP, 'LCP')} |
+            | INP | Interaction to Next Paint | ${formatMetric(webVitals.INP, 'INP')} | ${getEmoji(webVitals.INP, 'INP')} |
+            | CLS | Cumulative Layout Shift | ${formatMetric(webVitals.CLS, 'CLS')} | ${getEmoji(webVitals.CLS, 'CLS')} |
+
+            ### 📝 Core Web Vitals 기준값
+            - **LCP (Largest Contentful Paint)**: 가장 큰 콘텐츠가 화면에 그려지는 시점 
+              - 🟢 Good: < 2.5s
+              - 🟠 Needs Improvement: < 4.0s
+              - 🔴 Poor: ≥ 4.0s
+            
+            - **INP (Interaction to Next Paint)**: 사용자 상호작용에 대한 전반적인 응답성
+              - 🟢 Good: < 200ms
+              - 🟠 Needs Improvement: < 500ms
+              - 🔴 Poor: ≥ 500ms
+            
+            - **CLS (Cumulative Layout Shift)**: 페이지 로드 중 예기치 않은 레이아웃 변경의 정도
+              - 🟢 Good: < 0.1
+              - 🟠 Needs Improvement: < 0.25
+              - 🔴 Poor: ≥ 0.25
+
+            > 📅 측정 시간: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `📊 웹사이트 성능 측정 결과 - ${new Date().toLocaleString('ko-KR', { 
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              })}`,
+              body: body,
+              labels: ['lighthouse-audit', 'web-vitals']
+            });
