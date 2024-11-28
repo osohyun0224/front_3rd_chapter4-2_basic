@@ -66,22 +66,22 @@ function displayProducts(products) {
 }
 
 window.onload = () => {
-  let status = 'idle';
+  let productSection = document.querySelector("#all-products");
+  let status = "idle";
 
-  let productSection = document.querySelector('#all-products');
-
-
-  window.onscroll = () => {
-      let position = productSection.getBoundingClientRect().top - (window.scrollY + window.innerHeight);
-      if (status == 'idle' && position <= 0) {
-          loadProducts();
-
-          // Simulate heavy operation. It could be a complex price calculation. <-- need to improve this
-          // This is a blocking operation that will freeze the UI
-          // how to improve this: https://ko.javascript.info/event-loop <-- use event loop
-          for (let i = 0; i < 10000000; i++) {
-              const temp = Math.sqrt(i) * Math.sqrt(i);
-          }
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting && status === "idle") {
+        status = "loading";
+        loadProducts().then(() => {
+          status = "idle";
+        });
+        for (let i = 0; i < 10000000; i++) {
+          const temp = Math.sqrt(i) * Math.sqrt(i);
+        }
       }
-  }
-}
+    });
+  });
+
+  observer.observe(productSection);
+};
