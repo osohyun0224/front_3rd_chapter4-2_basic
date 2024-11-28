@@ -274,15 +274,15 @@ website_name: "Performance Course",
    > 개선 방식: 서비스에 대한 설명을 서술적으로 메타 정보에 추가했습니다.  
    **AS-IS**
    ```html
-  ...
-   ```
 
    **TO-BE**
    ```html
    <meta name="description" content="Discover top-quality VR headsets from leading brands. Shop our best-selling virtual reality devices for immersive gaming and entertainment experiences." />
    ```
 
-   | 검색엔진 최적화 점수 | 92점 | 100점 |
+   >  검색엔진 최적화 점수 | 92점 | 100점 |
+
+   
 
 3. **백그라운드 및 포그라운드 색상의 대비율 조정**  
    글자색과 배경색의 대비가 떨어지면 가독성에 문제가 생길 수 있습니다. 따라서 적절한 색상 대비를 유지하는 것이 중요합니다.
