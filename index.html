@@ -66,9 +66,24 @@
         
         <section class="hero">
             <picture>
-                  <source media="(max-width: 575px)" srcset="images/Hero_Mobile.avif">
-                  <source media="(min-width: 576px) and (max-width: 960px)" srcset="images/Hero_Tablet.avif">
-                <img src="images/Hero_Desktop.avif" alt="Hero Image for Desktop">
+              <source
+              media="(max-width: 575px)"
+              width="575"
+              height="575"
+              srcset="images/Hero_Mobile.avif"
+            />
+            <source
+              media="(min-width: 576px) and (max-width: 960px)"
+              width="960"
+              height="770"
+              srcset="images/Hero_Tablet.avif"
+            />
+            <img
+              src="images/Hero_Desktop.avif"
+              width="960"
+              height="560"
+              alt="Hero"
+            />
             </picture>
             <div class="hero-content">
                 <div class="container">
